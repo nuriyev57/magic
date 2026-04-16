@@ -50,7 +50,11 @@ Set `MAGIC_DEBUG=1` to log every forwarded call to `/tmp/magic-*/shim.log`.
 
 ## Limitations
 
-Tested with Claude Code. Wired up for GitHub Copilot CLI (`copilot`) but not yet tested end to end. Codex and other agentic coders are on the roadmap. If you try one and it works (or breaks in an interesting way), open an issue.
+Only Claude Code works today.
+
+GitHub Copilot CLI (`copilot`) is wanted but not yet supported: it spawns one persistent `bash --norc --noprofile` and pipes commands to its stdin, instead of the per-call `bash -c <cmd>` pattern magic's shim was built around. Making it work needs a stdin-bridging shim that forwards the persistent local bash to a remote one over SSH (pty, signals, exit codes and all). Help/PRs welcome.
+
+Codex and other agentic coders are on the roadmap. If you try one and it works (or breaks in an interesting way), open an issue.
 
 ## Caveats
 
