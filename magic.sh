@@ -69,13 +69,23 @@ ln -s "$shim" "$bindir/sh"
 
 case "$(basename "${agent_argv[0]}")" in
   claude)
+    # Claude Code only honors CLAUDE_CODE_SHELL if the path contains "bash" or
+    # "zsh"; our shim is named "bash" so it passes. Disable the native file
+    # tools so all I/O flows through the shell, and thus through the shim.
     agent_argv+=(--disallowedTools Read Write Edit Glob Grep --append-system-prompt "$SYSTEM_PROMPT")
+    export CLAUDE_CODE_SHELL="$shim"
+    ;;
+  copilot)
+    # Copilot CLI reads $SHELL to pick the bash it spawns for its shell tool.
+    # Deny its built-in file tools so I/O also flows through the shell.
+    agent_argv+=(--deny-tool 'write' --deny-tool 'read')
+    export SHELL="$shim"
     ;;
 esac
 
 echo "magic: tmpdir=$tmpdir" >&2
 
-# Claude Code only honors CLAUDE_CODE_SHELL if the path contains "bash" or "zsh";
-# our shim is named "bash" so it passes. Do NOT prepend PATH or override SHELL —
-# unrelated subprocesses would find the shim, invoke it with no args, and hang.
-CLAUDE_CODE_SHELL="$shim" exec "${agent_argv[@]}"
+# Do NOT prepend PATH with the shim dir: unrelated subprocesses would look up
+# `bash`/`sh` via PATH, find the shim, invoke it with no args, and hang on the
+# interactive remote bash branch.
+exec "${agent_argv[@]}"

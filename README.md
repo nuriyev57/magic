@@ -50,7 +50,7 @@ Set `MAGIC_DEBUG=1` to log every forwarded call to `/tmp/magic-*/shim.log`.
 
 ## Limitations
 
-Only tested with Claude Code so far. Codex, Copilot, and other agentic coders are on the roadmap but not yet wired up. If you try one and it works (or breaks in an interesting way), open an issue.
+Tested with Claude Code. Wired up for GitHub Copilot CLI (`copilot`) but not yet tested end to end. Codex and other agentic coders are on the roadmap. If you try one and it works (or breaks in an interesting way), open an issue.
 
 ## Caveats
 
