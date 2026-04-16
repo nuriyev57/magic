@@ -48,6 +48,10 @@ The agent sees a filesystem, runs commands, reads files, and has no idea any of 
 
 Set `MAGIC_DEBUG=1` to log every forwarded call to `/tmp/magic-*/shim.log`.
 
+## Limitations
+
+Only tested with Claude Code so far. Codex, Copilot, and other agentic coders are on the roadmap but not yet wired up. If you try one and it works (or breaks in an interesting way), open an issue.
+
 ## Caveats
 
 * `cd` doesn't persist across the agent's Bash calls. That's the agent's own behavior, not magic's. Chain multi-step work with `&&` in one call.
