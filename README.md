@@ -1,5 +1,16 @@
 # magic
 
+<table>
+  <tr>
+    <td>
+      <img src="https://github.com/user-attachments/assets/f0f49790-8a87-4d81-957c-621572346761" />
+    </td>
+    <td width="270">
+      <video src="https://github.com/user-attachments/assets/550ff2f6-34a7-4135-adc3-2a114be9c0a0" controls></video>
+    </td>
+  </tr>
+</table>
+
 Your remote machine has restricted internet and you can't install your favorite agentic coder on it? Just run the agent locally and let it work against the remote over SSH, the same way you would yourself.
 
 ## Run it
