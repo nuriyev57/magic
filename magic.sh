@@ -133,4 +133,10 @@ esac
 
 echo "magic: tmpdir=$tmpdir" >&2
 
+# Change to /tmp before launching the agent so its UI (and any local-cwd
+# introspection like workspace detection, git root, etc.) doesn't display
+# the user's project dir. The agent's shell commands all route to the
+# remote via the shim anyway, so the local cwd is cosmetic.
+cd /tmp
+
 exec "${agent_argv[@]}"
