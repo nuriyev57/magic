@@ -50,7 +50,7 @@ Set `MAGIC_DEBUG=1` to log every forwarded call to `/tmp/magic-*/shim.log`.
 
 ## Limitations
 
-Tested with Claude Code and GitHub Copilot CLI (`copilot`). For Copilot, magic prepends the shim dir to PATH (Copilot's hook) and adds `--excluded-tools view --excluded-tools str_replace_editor` so its native file tools are off and I/O routes through the shell. The shim uses `ssh -tt` to preserve pty mode, which Copilot's persistent `bash --norc --noprofile` session needs.
+Tested with Claude Code and GitHub Copilot CLI (`copilot`). For Copilot, magic prepends the shim dir to PATH (its shell hook), writes a small custom agent file to `~/.copilot/agents/magic-remote.agent.md` that whitelists only shell-family tools and sets `includeEnvironmentContext: false` to stop Copilot answering environment questions from its own process context, then launches Copilot with `--agent magic-remote`. The shim uses `ssh -tt` to preserve pty mode, which Copilot's persistent `bash --norc --noprofile` session needs.
 
 Codex and other agentic coders are on the roadmap. If you try one and it works (or breaks in an interesting way), open an issue.
 

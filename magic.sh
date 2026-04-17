@@ -84,10 +84,49 @@ case "$(basename "${agent_argv[0]}")" in
     ;;
   copilot)
     # Copilot spawns bash via node-pty and looks it up through PATH, so
-    # prepending the shim dir is how we intercept. Exclude its native file
-    # tools (view = read, str_replace_editor = edit/create) so file I/O also
-    # flows through the shell.
-    agent_argv+=(--excluded-tools view --excluded-tools str_replace_editor)
+    # prepending the shim dir is how we intercept the shell.
+    #
+    # File tools and env-context also need handling. Copilot's built-in file
+    # tools vary by model (view/create/edit/grep/glob for Claude, view/
+    # apply_patch/glob for gpt-5.x), so --excluded-tools can't cover them all
+    # without "Unknown tool" warnings. Copilot also answers env questions
+    # (OS, hostname, pwd) from process context instead of running a shell.
+    #
+    # Fix both with a custom agent: tools whitelist limits Copilot to the
+    # shell family, and includeEnvironmentContext: false + prompt body force
+    # it to verify env facts via bash. The agent lives at
+    # ~/.copilot/agents/magic-remote.agent.md (or $COPILOT_HOME/agents/).
+    copilot_home="${COPILOT_HOME:-$HOME/.copilot}"
+    copilot_agents_dir="$copilot_home/agents"
+    mkdir -p "$copilot_agents_dir"
+    cat > "$copilot_agents_dir/magic-remote.agent.md" <<'AGENT'
+---
+name: magic-remote
+displayName: Magic Remote
+description: Agent whose shell runs on a remote machine over SSH.
+tools:
+  - bash
+  - read_bash
+  - write_bash
+  - stop_bash
+  - list_shells
+  - web_search
+  - web_fetch
+promptParts:
+  includeAISafety: true
+  includeToolInstructions: true
+  includeCustomAgentInstructions: true
+  includeEnvironmentContext: false
+---
+
+Your Bash tool executes on a REMOTE machine over SSH. The local host where this process runs is NOT what the user cares about.
+
+Rules:
+- NEVER answer questions about the OS, hostname, filesystem, users, or environment from your own context. Always verify with a shell command first.
+- All file paths refer to the remote filesystem. Use cat/head/tail/sed/find/grep via bash. No native file tools are available.
+- Chain multi-step work with && in a single bash call since each call is a fresh shell.
+AGENT
+    agent_argv+=(--agent magic-remote)
     export PATH="$bindir:$PATH"
     ;;
 esac
