@@ -42,9 +42,15 @@ mkdir -p "$bindir"
 control="$tmpdir/ctl"
 logfile="$tmpdir/shim.log"
 
-"${ssh_parts[0]}" -M -S "$control" -f -N -o ControlPersist=60 "${ssh_parts[@]:1}"
+# Keepalive options keep idle ssh sessions warm between agent tool calls.
+# Without them, a server with a short idle timeout (or a flaky network) can
+# drop the connection while the agent is reasoning, leading to "Invalid
+# shell ID" errors on the next read from a pty the agent thinks is alive.
+ssh_keepalive=(-o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes)
 
-ssh_base=$(printf '%q ' "${ssh_parts[0]}" -S "$control" -tt -o LogLevel=ERROR "${ssh_parts[@]:1}")
+"${ssh_parts[0]}" -M -S "$control" -f -N -o ControlPersist=60 "${ssh_keepalive[@]}" "${ssh_parts[@]:1}"
+
+ssh_base=$(printf '%q ' "${ssh_parts[0]}" -S "$control" -tt -o LogLevel=ERROR "${ssh_keepalive[@]}" "${ssh_parts[@]:1}")
 logfile_q=$(printf '%q' "$logfile")
 
 shim="$bindir/bash"
