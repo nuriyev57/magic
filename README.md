@@ -50,12 +50,14 @@ Set `MAGIC_DEBUG=1` to log every forwarded call to `/tmp/magic-*/shim.log`.
 
 ## Limitations
 
-Tested with Claude Code and GitHub Copilot CLI (`copilot`). For Copilot, magic prepends the shim dir to PATH (its shell hook), writes a small custom agent file to `~/.copilot/agents/magic-remote.agent.md` that whitelists only shell-family tools and sets `includeEnvironmentContext: false` to stop Copilot answering environment questions from its own process context, then launches Copilot with `--agent magic-remote`. The shim uses `ssh -tt` to preserve pty mode, which Copilot's persistent `bash --norc --noprofile` session needs.
+Tested with Claude Code and GitHub Copilot CLI (`copilot`). For Copilot, magic prepends the shim dir to PATH (its shell hook), writes a small custom agent file to `~/.copilot/agents/magic-remote.agent.md` that whitelists only shell-family tools and sets `includeEnvironmentContext: false` to stop Copilot answering environment questions from its own process context, then launches Copilot with `--agent magic-remote`. The shim calls ssh with `-T` (no remote pty) because Copilot already runs the shim inside its own pty, and stacking a second pty confuses its output reader.
+
+If your ssh config reaches the host via a `ProxyCommand` (e.g. `aws ssm start-session …`), magic handles it: the shim has a recursion guard so ssh's `ProxyCommand` (which ssh spawns via `sh -c`) passes through to the real `/bin/sh` instead of looping back into the shim.
 
 Codex and other agentic coders are on the roadmap. If you try one and it works (or breaks in an interesting way), open an issue.
 
 ## Caveats
 
-* `cd` doesn't persist across the agent's Bash calls. That's the agent's own behavior, not magic's. Chain multi-step work with `&&` in one call.
+* With Claude, `cd` doesn't persist across Bash calls because Claude spawns a fresh shell for each one; chain multi-step work with `&&` in one call. (Copilot uses a single persistent bash session, so `cd` does persist there.)
 * `magic.sh` uses bash `eval` to split the `ssh=` and `agent=` strings, so variables and subshells in those strings will expand. You control the input, so just don't paste things you don't understand.
-* The tmpdir is not cleaned up on exit. The SSH master self-expires 60 seconds after the last call, but that's fine: if the agent goes idle longer than that, the next call just opens a fresh ssh connection (a bit slower, still works).
+* The SSH control master and the tmpdir are cleaned up automatically when `magic.sh` exits (via `ssh -O exit` and an `EXIT` trap).
