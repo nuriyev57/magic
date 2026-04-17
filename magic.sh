@@ -134,6 +134,12 @@ Rules:
 AGENT
     agent_argv+=(--agent magic-remote)
     export PATH="$bindir:$PATH"
+    # Copilot's default 20 KB threshold for "large" command output is too
+    # tight: anything above it gets saved to a local temp file that the
+    # model is told to read with the view tool, but view is not in our
+    # whitelist, so the model can't read back the overflow and ends up
+    # confused. Bumping to 256 KB keeps typical outputs inline.
+    export COPILOT_LARGE_OUTPUT_THRESHOLD_BYTES=262144
     ;;
 esac
 
