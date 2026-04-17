@@ -52,13 +52,20 @@ shim="$bindir/bash"
 # shim will use ($@, $#, $PPID, $$, $PWD, $MAGIC_DEBUG, ${q[*]}, …) is escaped
 # with \$ so it lands in the output literally.
 cat > "$shim" <<SHIM
-#!/usr/bin/env bash
+#!/bin/bash
 # magic: forward this shell invocation to a remote bash over SSH.
+# Shebang is /bin/bash (not /usr/bin/env bash) so that when Copilot's PATH
+# lookup finds this shim, the interpreter resolution doesn't loop back to
+# the shim via /usr/bin/env's own PATH lookup.
 if [ -n "\$MAGIC_DEBUG" ]; then
   { echo "[\$(date +%T.%N)] pid=\$\$ ppid=\$PPID pwd=\$PWD argc=\$# args=\$(printf '%q ' "\$@")"; } >> $logfile_q 2>&1
 fi
 if [ \$# -eq 0 ]; then
-  exec $ssh_base bash
+  # No-args invocation is how unrelated subprocesses probe for a login shell.
+  # Falling back to local /bin/bash is safe and avoids hanging on an
+  # interactive remote prompt. The agent's real shell calls always arrive
+  # with args (e.g. \`-c <cmd>\` or \`--norc --noprofile\`).
+  exec /bin/bash
 fi
 q=()
 for a in "\$@"; do q+=("\$(printf %q "\$a")"); done
@@ -75,11 +82,16 @@ case "$(basename "${agent_argv[0]}")" in
     agent_argv+=(--disallowedTools Read Write Edit Glob Grep --append-system-prompt "$SYSTEM_PROMPT")
     export CLAUDE_CODE_SHELL="$shim"
     ;;
+  copilot)
+    # Copilot spawns bash via node-pty and looks it up through PATH, so
+    # prepending the shim dir is how we intercept. Exclude its native file
+    # tools (view = read, str_replace_editor = edit/create) so file I/O also
+    # flows through the shell.
+    agent_argv+=(--excluded-tools view --excluded-tools str_replace_editor)
+    export PATH="$bindir:$PATH"
+    ;;
 esac
 
 echo "magic: tmpdir=$tmpdir" >&2
 
-# Do NOT prepend PATH or override SHELL: unrelated subprocesses would look up
-# `bash`/`sh` and find the shim, invoke it with no args, and hang on the
-# interactive remote bash branch.
 exec "${agent_argv[@]}"
