@@ -48,9 +48,30 @@ logfile="$tmpdir/shim.log"
 # shell ID" errors on the next read from a pty the agent thinks is alive.
 ssh_keepalive=(-o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes)
 
-"${ssh_parts[0]}" -M -S "$control" -f -N -o ControlPersist=60 "${ssh_keepalive[@]}" "${ssh_parts[@]:1}"
+# ControlPersist=yes: keep the master alive indefinitely for the duration of
+# the magic.sh session, regardless of how long the agent sits idle between
+# user turns. A short ControlPersist (e.g. 60s) was causing the master to
+# die during a user pause; the next shim invocation would find a stale
+# socket and the agent would report "Invalid shell ID" on the next command.
+# We clean the master up explicitly on magic.sh exit via the trap below.
+"${ssh_parts[0]}" -M -S "$control" -f -N -o ControlPersist=yes "${ssh_keepalive[@]}" "${ssh_parts[@]:1}"
 
-ssh_base=$(printf '%q ' "${ssh_parts[0]}" -S "$control" -tt -o LogLevel=ERROR "${ssh_keepalive[@]}" "${ssh_parts[@]:1}")
+# Tear down the control master (and tmpdir) when magic.sh exits so we don't
+# leave orphaned ssh processes or sockets behind.
+cleanup() {
+  "${ssh_parts[0]}" -S "$control" -O exit "${ssh_parts[@]:1}" >/dev/null 2>&1 || true
+  rm -rf "$tmpdir"
+}
+trap cleanup EXIT
+
+# -T: don't allocate a remote pty. The agent's bash tool already runs this
+# shim inside its own pty; stacking a second remote pty on top injects
+# CR/LF translation and raw-mode toggles that confuse agents' output
+# readers (Copilot in particular). Do NOT add -n — Copilot runs bash as a
+# persistent session (`bash --norc --noprofile`) and pipes commands in via
+# stdin; -n would pin ssh's stdin to /dev/null and kill that session
+# before the first command arrives ("Failed to start bash process").
+ssh_base=$(printf '%q ' "${ssh_parts[0]}" -S "$control" -T -o LogLevel=ERROR "${ssh_keepalive[@]}" "${ssh_parts[@]:1}")
 logfile_q=$(printf '%q' "$logfile")
 
 shim="$bindir/bash"
@@ -66,6 +87,19 @@ cat > "$shim" <<SHIM
 if [ -n "\$MAGIC_DEBUG" ]; then
   { echo "[\$(date +%T.%N)] pid=\$\$ ppid=\$PPID pwd=\$PWD argc=\$# args=\$(printf '%q ' "\$@")"; } >> $logfile_q 2>&1
 fi
+# Recursion guard: if this shim invokes ssh and the user's ssh config uses a
+# ProxyCommand (e.g. \`aws ssm start-session ...\`), ssh will spawn that
+# command via \`sh -c "..."\`. Since \$bindir is first on PATH and we also
+# symlink sh -> this shim, the ProxyCommand would loop back into the shim
+# and fork-bomb. On recursion we defer to the real /bin/bash or /bin/sh so
+# the ProxyCommand runs normally and ssh can establish its connection.
+if [ -n "\$MAGIC_SHIM_ACTIVE" ]; then
+  case "\$(basename -- "\$0")" in
+    sh) exec /bin/sh "\$@" ;;
+    *)  exec /bin/bash "\$@" ;;
+  esac
+fi
+export MAGIC_SHIM_ACTIVE=1
 if [ \$# -eq 0 ]; then
   # No-args invocation is how unrelated subprocesses probe for a login shell.
   # Falling back to local /bin/bash is safe and avoids hanging on an
